@@ -51,4 +51,96 @@ CHAT: https://chatgpt.com/c/692154fb-2b80-8329-aef2-96050f05f587
 - Docker CLI (docker) — командная утилита, которую ты запускаешь в терминале (docker run, docker build и т.д.). CLI отправляет команды на daemon через REST API (локально по сокету либо по TCP).
 
 Пример взаимодействия:
-Ты набираешь docker run nginx. CLI формирует запрос -> отправляет daemon -> daemon создаёт/запускает контейнер -> возвращает статус.
+Ты набираешь docker run nginx. 
+
+CLI формирует запрос -> отправляет daemon -> daemon создаёт/запускает контейнер -> возвращает статус.
+
+
+### Основные понятия: Image, Container, Registry, Layers, Tag
+
+#### Image (образ)
+- Образ — это слепок файловой системы и метаданных, который служит шаблоном для запуска контейнеров.
+- Образы обычно создаются из Dockerfile и состоят из слоёв (layers). Образы неизменяемы (immutable).
+- Команды:
+    - docker images — список локальных образов.
+    - docker pull ubuntu:22.04 — скачивает образ из реестра.
+
+Пример простого Dockerfile:
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["python", "app.py"]
+```
+
+docker build -t myapp:1.0 .
+
+
+#### Container (контейнер)
+
+- Контейнер — это запущенный (или созданный, но не запущенный) экземпляр образа. Он добавляет сверху образа writable layer, где происходят изменения во время работы.
+- Команды:
+```shell
+docker run -d --name web -p 8080:80 nginx  # — запустить nginx в фоне, пробросив порт.
+docker ps # — список запущенных контейнеров.
+docker ps -a # — все контейнеры, включая остановленные.
+docker exec -it <container> /bin/bash # — зайти внутрь запущенного контейнера.
+docker stop <container> / docker rm <container>.
+```
+
+Важно: если удалить контейнер — writable слой и данные в нём удаляются (если не использованы volume).
+
+
+### Registry (реестр)
+
+- Registry — это сервис для хранения и распространения образов. Примеры: Docker Hub, GitHub Container Registry, GitLab Registry, приватные реестры (Harbor, Artifactory).
+
+- Образы пушатся/пуллятся по имени registry.domain.com/namespace/image:tag.
+
+Команды:
+    - docker push myrepo/myimage:1.0
+    - docker pull myrepo/myimage:1.0
+    - docker login — аутентификация.
+
+
+### Layers (слои)
+
+- Слои — это цепочка файловых изменений (diff), где каждый слой создаётся командой в Dockerfile (например RUN, COPY, ADD).
+- Слои являются только для чтения (read-only) и объединяются с помощью union filesystem (overlay2 и т.п.). Последний слой — writable для контейнера.
+- Преимущества:
+    - Кэширование при сборке: если слой не поменялся, Docker берёт его из кеша.
+    - Повторное использование: слои могут разделяться между образами, уменьшая объём хранимых данных.
+- Команды для просмотра:
+    - docker history myimage:tag — список слоёв и размеров.
+    - docker inspect myimage:tag — метаданные (включая слои, rootfs).
+
+Практическое правило: минимизируй количество больших слоёв и используй .dockerignore, старайся объединять команды RUN там, где это разумно, чтобы уменьшить число слоёв и размер.
+
+
+### Tag (тег)
+- Тег — читабельный алиас для образа (обычно указывает версию). Формат: image:tag. По умолчанию тег latest.
+- Тег указывает на определный manifest / digest в реестре. Тег можно перетегировать локально:
+    - docker tag myapp:1.0 myrepo/myapp:1.0
+    - docker push myrepo/myapp:1.0
+- Digest — хеш (sha256) образа, уникально определяет конкретный набор слоёв; тег может указывать на digest, но тег сам по себе изменяем (можно переместить тег на другой digest).
+
+
+### Практическая демонстрация (шаги и команды для видео)
+Предложу короткий сценарий с набором команд, которые хорошо показать в видео:
+
+1. Скачиваем образ и запускаем контейнер:
+```shell
+docker pull nginx:alpine
+
+docker run --name demo-nginx -d -p 8080:80 nginx:alpine
+```
+
+Покажи docker ps, зайди в браузер на localhost:8080 (или покажи curl):
+```shell
+curl http://localhost:8080
+```
+
+2. Исследуем образ и контейнер:
+   docker system df
