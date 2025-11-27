@@ -27,3 +27,62 @@ CHAT: https://chatgpt.com/c/69214d95-d610-8329-802a-ae2221c92bdb
 docker run -it ubuntu bash
 ```
  Выйти, зайти снова через docker exec -it.
+
+
+
+
+Темы, которые стоит добавить в теорию Docker:
+1. Dockerfile - детальный разбор инструкций
+Хотя есть примеры, нет подробного объяснения:
+Разница между CMD и ENTRYPOINT
+ARG vs ENV
+COPY vs ADD
+EXPOSE, USER, HEALTHCHECK
+Multi-stage builds (очень важно для оптимизации)
+2. Сети Docker (Networks) ⚠️ Критически важно
+Полностью отсутствует тема:
+Типы сетей: bridge (по умолчанию), host, none, overlay
+Как контейнеры общаются между собой
+DNS внутри Docker
+Команды: docker network create/ls/inspect
+3. Docker Compose
+Управление многоконтейнерными приложениями:
+docker-compose.yml структура
+Связывание сервисов
+Переменные окружения из .env
+4. Жизненный цикл контейнера
+Состояния: created → running → paused → stopped → deleted
+Команды: start, stop, pause, unpause, restart, kill
+Restart policies: no, on-failure, always, unless-stopped
+5. Ограничения ресурсов (Resource limits)
+--memory, --cpus, --memory-swap
+cgroups в действии
+6. Оптимизация образов
+.dockerignore - что исключать из build context
+Порядок команд в Dockerfile (для кеширования)
+Multi-stage builds для уменьшения размера
+7. Логирование
+docker logs
+Драйверы логов: json-file, syslog, journald
+Ротация логов
+8. Переменные окружения и конфигурация
+-e, --env-file
+Передача секретов (Docker secrets)
+9. Проброс портов (подробнее)
+-p vs -P
+Привязка к конкретному интерфейсу
+Как работает port mapping изнутри
+10. Очистка системы
+docker system prune
+docker volume prune
+docker image prune
+docker builder prune
+11. Безопасность
+Запуск от non-root пользователя
+Read-only файловые системы
+Сканирование образов на уязвимости
+Secrets management
+12. Build context и кеширование
+Что такое build context
+Как Docker кеширует слои
+BuildKit (новый движок сборки)
