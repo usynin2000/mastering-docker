@@ -32,13 +32,13 @@ docker run -it ubuntu bash
 
 
 Темы, которые стоит добавить в теорию Docker:
-1. Dockerfile - детальный разбор инструкций
+<!-- 1. Dockerfile - детальный разбор инструкций
 Хотя есть примеры, нет подробного объяснения:
 Разница между CMD и ENTRYPOINT
 ARG vs ENV
 COPY vs ADD
-EXPOSE, USER, HEALTHCHECK
-Multi-stage builds (очень важно для оптимизации)
+EXPOSE, USER, HEALTHCHECK -->
+<!-- Multi-stage builds (очень важно для оптимизации) -->
 2. Сети Docker (Networks) ⚠️ Критически важно
 Полностью отсутствует тема:
 Типы сетей: bridge (по умолчанию), host, none, overlay

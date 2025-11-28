@@ -381,8 +381,29 @@ docker inspect myimage | grep -A 10 Labels
 
 ### 🎯 Multi-stage Builds — Оптимизация размера
 
-Проблема: при сборке нужны инструменты (компиляторы, build tools), но в финальном образе они не нужны.
-**Решение: Multi-stage builds.**
+Проблема: Для сборки приложения часто нужны инструменты (компиляторы, npm, pip, gcc), которые занимают много места, но в финальном образе они не нужны для запуска приложения.
+
+Решение: Разделить процесс на стадии:
+1. Стадия сборки — устанавливаем все инструменты, компилируем, собираем.
+2. Финальная стадия — копируем только результат сборки в минимальный образ
+
+Как это работает?
+```Dockerfile
+# Стадия 1: даём ей имя "builder"
+FROM node:18 AS builder
+# ... собираем приложение ...
+
+# Стадия 2: новый чистый образ
+FROM nginx:alpine
+# Копируем только результат из стадии "builder"
+COPY --from=builder /app/build /usr/share/nginx/html
+```
+
+Ключевые преимущества:
+- 📦 Значительно меньший размер образа (иногда в 10-50 раз!)
+- 🔒 Безопаснее (нет инструментов сборки в production)
+- ⚡ Быстрее разворачивается и скачивается
+
 
 Пример 1: Go приложение
 Без multi-stage (❌):
@@ -518,5 +539,306 @@ CMD ["python", "app.py"]
 
 
 
-// Узнать чуть больше про multi-stage builds для production
-Практические примеры python flask приложения и статического сайт с  nginx
+### Практический пример 1: Flask приложение
+Структура проекта:
+flask_app/
+├── Dockerfile
+├── requirements.txt
+├── app.py
+└── .dockerignore
+
+
+1. app.py — простое Flask приложение:
+```python
+from flask import Flask, jsonify
+import datetime
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return jsonify({
+        "message": "Hello from Flask in Docker!",
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "healthy"}), 200
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+```
+
+2. requirements.txt:
+Flask==3.0.0
+gunicorn==21.2.0
+
+
+3. Dockerfile с multi-stage build:
+```Dockerfile
+# ============================================
+# Стадия 1: Сборка и установка зависимостей
+# ============================================
+FROM python:3.11 AS builder
+
+# Устанавливаем рабочую директорию
+WORKDIR /app
+
+# Копируем только requirements для кеширования
+COPY requirements.txt .
+
+# Устанавливаем зависимости в /install директорию
+# --prefix=/install указывает куда устанавливать
+RUN pip install --no-cache-dir --prefix=/install --no-warn-script-location \
+    -r requirements.txt
+
+# ============================================
+# Стадия 2: Финальный минимальный образ
+# ============================================
+FROM python:3.11-slim
+
+# Создаём non-root пользователя для безопасности
+RUN useradd -m -u 1000 flaskuser
+
+WORKDIR /app
+
+# Копируем установленные пакеты из стадии builder
+COPY --from=builder /install /usr/local
+
+# Копируем код приложения
+COPY --chown=flaskuser:flaskuser app.py .
+
+# Переключаемся на non-root пользователя
+USER flaskuser
+
+# Документируем порт
+EXPOSE 5000
+
+# Healthcheck для проверки работоспособности
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" || exit 1
+
+# Запускаем через gunicorn для production
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
+```
+
+Сборка и запуск:
+```shell
+# Сборка образа
+docker build -t flask-app:multistage .
+
+# Проверка размера
+docker images flask-app:multistage
+
+# Запуск контейнера
+docker run -d -p 5000:5000 --name my-flask-app flask-app:multistage
+
+# Проверка работы
+curl http://localhost:5000
+curl http://localhost:5000/health
+
+# Проверка healthcheck
+docker ps  # смотрим STATUS колонку, должно быть "healthy"
+```
+
+
+### 🌐 Практический пример 2: Статический сайт с Nginx
+Создадим React-приложение (или просто статический HTML), соберём его и развернём на Nginx.
+Структура проекта:
+static_site/
+├── Dockerfile
+├── nginx.conf
+└── src/
+    ├── index.html
+    ├── style.css
+    └── app.js
+
+
+1. src/index.html:
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Multi-stage Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🐳 Docker Multi-stage Build</h1>
+        <p>Этот сайт собран и развёрнут с использованием multi-stage Dockerfile</p>
+        <div id="info"></div>
+        <button onclick="loadData()">Загрузить данные</button>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+```
+
+2. src/style.css:
+```css
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    background: white;
+    padding: 3rem;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    text-align: center;
+    max-width: 600px;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+button {
+    margin-top: 1rem;
+    padding: 10px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+button:hover {
+    background: #764ba2;
+}
+
+#info {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f0f0f0;
+    border-radius: 5px;
+    display: none;
+}
+```
+
+3. src/app.js:
+```js
+function loadData() {
+    const info = document.getElementById('info');
+    info.style.display = 'block';
+    info.innerHTML = `
+        <strong>Информация о сборке:</strong><br>
+        Время загрузки: ${new Date().toLocaleString('ru-RU')}<br>
+        User Agent: ${navigator.userAgent.substring(0, 50)}...
+    `;
+}
+```
+
+4. nginx.conf:
+```conf
+server {
+    listen 80;
+    server_name localhost;
+    
+    root /usr/share/nginx/html;
+    index index.html;
+    
+    # Gzip сжатие
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    
+    # Кеширование статических файлов
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # SPA fallback (если используешь React Router)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+    
+    # Healthcheck endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+}
+```
+
+5. Dockerfile с multi-stage build:
+```Dockerfile
+# ============================================
+# Стадия 1: Сборка статических файлов
+# ============================================
+FROM node:18-alpine AS builder
+
+WORKDIR /build
+
+# Если используешь Node.js проект (React, Vue и т.д.)
+# COPY package*.json ./
+# RUN npm ci --only=production
+
+# Копируем исходники
+COPY src/ ./src/
+
+# Для примера просто копируем, но здесь мог быть npm run build
+# или любой другой процесс сборки (Webpack, Vite, etc.)
+RUN mkdir -p /build/dist && cp -r src/* /build/dist/
+
+# ============================================
+# Стадия 2: Production образ с Nginx
+# ============================================
+FROM nginx:alpine
+
+# Копируем кастомную конфигурацию nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Копируем собранные файлы из стадии builder
+COPY --from=builder /build/dist /usr/share/nginx/html
+
+# Добавляем метаданные
+LABEL maintainer="dev@example.com"
+LABEL description="Static website with Nginx using multi-stage build"
+
+# Документируем порт
+EXPOSE 80
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+
+# Nginx запускается автоматически через базовый образ
+# CMD ["nginx", "-g", "daemon off;"]
+```
+
+Сборка и запуск:
+```shell
+# Сборка образа
+docker build -t static-site:multistage .
+
+# Проверка размера (должно быть ~25-30MB)
+docker images static-site:multistage
+
+# Запуск контейнера
+docker run -d -p 8080:80 --name my-static-site static-site:multistage
+
+# Проверка в браузере
+# Открой: http://localhost:8080
+
+# Проверка healthcheck
+curl http://localhost:8080/health
+docker ps  # проверяем STATUS
+```
