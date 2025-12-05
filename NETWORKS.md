@@ -193,4 +193,151 @@ docker network create --driver overlay my-overlay
 docker service create --name web --network my-overlay --replicas 3 nginx:alpineКонтейнеры на разных нодах смогут общаться через `my-overlay`.
 
 ---
+Контейнеры на разных нодах смогут общаться через my-overlay.
 
+
+
+🔌 Как контейнеры общаются между собой?
+
+1. В одной bridge сети — через DNS
+Docker встраивает DNS-сервер в каждую пользовательскую bridge сеть.
+```shell
+❯ docker network create mynet
+b1f9aaa6f467de4e0307d8bb09ebff28e1a83425f8c8fa1531229f0999ce3812
+
+❯ docker run -d --name app1 --network mynet alpine sleep 1000
+63597a547e54f6d2a6aaf4aeae8758e3ac0c8ab56b6486ddf29ee725ccb06fa4
+
+❯ docker run -it --name app2 --network mynet alpine sh
+❯ ping app1
+
+PING app1 (172.19.0.2): 56 data bytes
+64 bytes from 172.19.0.2: seq=0 ttl=64 time=0.317 ms
+64 bytes from 172.19.0.2: seq=1 ttl=64 time=0.068 ms
+64 bytes from 172.19.0.2: seq=2 ttl=64 time=0.123 ms
+64 bytes from 172.19.0.2: seq=3 ttl=64 time=0.084 ms
+^C
+--- app1 ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 0.068/0.148/0.317 ms
+```
+
+
+2. В разных сетях — изоляция
+Контейнеры в разных сетях не видят друг друга по умолчанию.
+```shell
+docker network create net1
+docker network create net2
+
+docker run -d --name c1 --network net1 alpine sleep 1000
+docker run -d --name c2 --network net2 alpine sleep 1000
+
+docker exec c1 ping c2  # ❌ Не работает
+```
+
+3. Подключение контейнера к нескольким сетям
+```shell
+docker network connect net2 c1
+
+docker exec c1 ping c2  # ✅ Теперь работает!
+```
+
+### 🌐 DNS внутри Docker
+
+Docker встраивает внутренний DNS-сервер (127.0.0.11) в каждый контейнер.
+
+Этот DNS резолвит:
+- Имена контейнеров → их IP-адреса
+- Имена сервисов (в Docker Swarm) → IP всех реплик
+
+Проверка DNS
+```shell
+docker run -d --name web --network mynet nginx:alpine
+docker exec web cat /etc/resolv.conf
+```
+
+Вывод:
+```shell
+nameserver 127.0.0.11
+options ndots:0
+```
+
+127.0.0.11 — это встроенный DNS-сервер Docker.
+
+
+### Резолвинг по имени контейнера
+```shell
+docker run --rm --network mynet alpine nslookup web
+```
+
+Вывод:
+```shell
+Server:    127.0.0.11
+Address:   127.0.0.11:53
+
+Name:      web
+Address:   172.20.0.2
+```
+
+Docker автоматически связал имя web с IP контейнера.
+⚠️ Важно: DNS работает только в пользовательских bridge сетях, не в дефолтной bridge.
+
+
+
+
+### 🛠️ Команды для работы с сетями
+
+Просмотр сетей
+```shell
+docker network ls
+```
+
+Создание сети
+```shell
+# Bridge (по умолчанию)
+docker network create my-network
+
+# С указанием драйвера
+docker network create --driver bridge my-bridge
+
+# С подсетью
+docker network create --subnet=192.168.10.0/24 my-subnet
+```
+
+
+#### Инспектирование сети
+Покажет:
+- Подключенные контейнеры
+- IP-адреса
+- Gateway
+- Subnet
+
+
+## Подключение контейнера к сети
+```shell
+# При запуске
+docker run --network my-network nginx
+
+# К уже запущенному контейнеру
+docker network connect my-network container_name
+```
+
+Отключение контейнера от сети
+```shell
+docker network disconnect my-network container_name
+```
+
+Удаление сети
+```shell
+docker network rm my-network
+```
+
+⚠️ Нельзя удалить сеть, к которой подключены контейнеры.
+
+
+Удаление всех неиспользуемых сетей
+```shell
+docker network prune
+```
+
+# 🎯 Практический пример: Веб-приложение + База данных
