@@ -341,3 +341,290 @@ docker network prune
 ```
 
 # 🎯 Практический пример: Веб-приложение + База данных
+
+Создадим изолированную сеть для связки nginx + postgres.
+
+
+Шаг 1: Создаём сеть
+```shell
+docker network create app-tier
+```
+
+Шаг 2: Запускаем PostgreSQL
+```shell
+docker run -d \
+  --name mydb \
+  --network app-tier \
+  -e POSTGRES_USER=admin \
+  -e POSTGRES_PASSWORD=secret \
+  -e POSTGRES_DB=myapp \
+  postgres:15
+```
+
+Шаг 3: Запускаем веб-приложение
+```shell
+docker run -d \
+  --name webapp \
+  --network app-tier \
+  -p 8080:80 \
+  nginx:alpine
+```
+
+Шаг 4: Проверяем связь
+```shell
+# Из webapp можем обратиться к БД по имени
+docker exec webapp ping -c 3 mydb
+```
+
+Успех! webapp видит mydb по имени.
+
+Шаг 5: Подключение к БД из приложения
+Если бы это было Python-приложение:
+```python
+import psycopg2
+
+conn = psycopg2.connect(
+    host="mydb",  # Используем имя контейнера!
+    database="myapp",
+    user="admin",
+    password="secret"
+)
+```
+Docker DNS резолвит mydb в IP контейнера БД.
+
+
+🐳 Практический пример 2: Мульти-контейнерное приложение
+
+Создадим сеть с:
+- Frontend (nginx)
+- Backend (Python FastAPI)
+- Database (PostgreSQL)
+
+Структура
+```shell
+app-network
+  ├── frontend (nginx)
+  ├── backend (FastAPI)
+  └── database (PostgreSQL)
+```
+
+
+Шаг 1: Создаём сеть
+```shell
+docker network create app-network
+```
+
+Шаг 2: База данных
+```shell
+docker run -d \
+  --name database \
+  --network app-network \
+  -e POSTGRES_PASSWORD=dbpass \
+  -e POSTGRES_DB=appdb \
+  postgres:15
+```
+
+Шаг 3: Backend (FastAPI)
+Создай backend/app.py:
+```python
+from fastapi import FastAPI
+import psycopg2
+
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Backend is running"}
+
+@app.get("/db-check")
+def db_check():
+    try:
+        conn = psycopg2.connect(
+            host="database",  # Имя контейнера!
+            database="appdb",
+            user="postgres",
+            password="dbpass"
+        )
+        conn.close()
+        return {"status": "DB connected"}
+    except Exception as e:
+        return {"status": "DB error", "error": str(e)}
+```
+
+Создай backend/Dockerfile:
+```Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install fastapi uvicorn psycopg2-binary
+COPY app.py .
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Собери и запусти:
+```shell
+cd backend
+docker build -t mybackend .
+docker run -d \
+  --name backend \
+  --network app-network \
+  mybackend
+```
+
+Шаг 4: Frontend (Nginx как reverse proxy)
+Создай frontend/nginx.conf:
+```shell
+server {
+    listen 80;
+    
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+    
+    location /api/ {
+        proxy_pass http://backend:8000/;
+    }
+}
+```
+
+Создай frontend/index.html:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-container App</title>
+</head>
+<body>
+    <h1>Frontend</h1>
+    <button onclick="checkBackend()">Check Backend</button>
+    <button onclick="checkDB()">Check DB</button>
+    <div id="result"></div>
+    
+    <script>
+        async function checkBackend() {
+            const res = await fetch('/api/');
+            const data = await res.json();
+            document.getElementById('result').innerText = JSON.stringify(data);
+        }
+        
+        async function checkDB() {
+            const res = await fetch('/api/db-check');
+            const data = await res.json();
+            document.getElementById('result').innerText = JSON.stringify(data);
+        }
+    </script>
+</body>
+</html>
+```
+
+Создай frontend/Dockerfile:
+```Dockerfile
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY index.html /usr/share/nginx/html/
+```
+
+Собери и запусти:
+```shell
+cd frontend
+docker build -t myfrontend .
+docker run -d \
+  --name frontend \
+  --network app-network \
+  -p 8080:80 \
+  myfrontend
+```
+
+Шаг 5: Проверка
+
+Открой браузер: http://localhost:8080
+Нажми "Check Backend" → увидишь {"message": "Backend is running"}
+Нажми "Check DB" → увидишь {"status": "DB connected"}
+
+
+**Как это работает?**
+1. Запрос из браузера → frontend (nginx)
+2. Nginx проксирует /api/ → backend (по имени контейнера!)
+3. Backend обращается к database (тоже по имени!)
+4. Docker DNS резолвит все имена
+
+
+### 🔍 Продвинутые команды
+
+Инспектирование контейнера в контексте сети
+```shell
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' container_name
+```
+Покажет IP-адрес контейнера.
+
+
+Просмотр всех контейнеров в сети (В раздел contatiners)
+```shell
+docker network inspect app-network 
+```
+
+Создание сети с кастомными параметрами
+```shell
+docker network create \
+  --driver bridge \
+  --subnet 172.25.0.0/16 \
+  --gateway 172.25.0.1 \
+  --ip-range 172.25.5.0/24 \
+  custom-network
+```
+
+Назначение статического IP контейнеру
+```shell
+docker run -d \
+  --name myapp \
+  --network custom-network \
+  --ip 172.25.5.10 \
+  nginx
+```
+
+🎓 Best Practices
+✅ Создавай отдельные сети для каждого приложения — изоляция
+✅ Используй имена контейнеров для связи — не хардкодь IP
+✅ Не используй дефолтную bridge — нет DNS
+✅ Ограничивай доступ между сетями — подключай только нужные контейнеры
+✅ В production используй overlay для мультихоста — Swarm/Kubernetes
+✅ Документируй топологию сети — кто с кем должен общаться
+✅ Используй --internal для полной изоляции от интернета:
+```shell
+docker network create --internal secure-net
+```
+
+
+
+### 📚 Полезные команды — шпаргалка
+```shell
+# Список сетей
+docker network ls
+
+# Создать сеть
+docker network create mynet
+
+# Инспектировать
+docker network inspect mynet
+
+# Подключить контейнер
+docker network connect mynet container
+
+# Отключить контейнер
+docker network disconnect mynet container
+
+# Удалить сеть
+docker network rm mynet
+
+# Удалить все неиспользуемые
+docker network prune
+
+# Запустить с сетью
+docker run --network mynet nginx
+
+# IP контейнера
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' container
+
+# DNS lookup
+docker exec container nslookup другой_контейнер
+```

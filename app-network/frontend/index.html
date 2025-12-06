@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-container App</title>
+</head>
+<body>
+    <h1>Frontend</h1>
+    <button onclick="checkBackend()">Check Backend</button>
+    <button onclick="checkDB()">Check DB</button>
+    <div id="result"></div>
+    
+    <script>
+        async function checkBackend() {
+            const res = await fetch('/api/');
+            const data = await res.json();
+            document.getElementById('result').innerText = JSON.stringify(data);
+        }
+        
+        async function checkDB() {
+            const res = await fetch('/api/db-check');
+            const data = await res.json();
+            document.getElementById('result').innerText = JSON.stringify(data);
+        }
+    </script>
+</body>
+</html>

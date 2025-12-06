@@ -39,12 +39,12 @@ ARG vs ENV
 COPY vs ADD
 EXPOSE, USER, HEALTHCHECK -->
 <!-- Multi-stage builds (очень важно для оптимизации) -->
-2. Сети Docker (Networks) ⚠️ Критически важно
+<!-- 2. Сети Docker (Networks) ⚠️ Критически важно
 Полностью отсутствует тема:
 Типы сетей: bridge (по умолчанию), host, none, overlay
 Как контейнеры общаются между собой
 DNS внутри Docker
-Команды: docker network create/ls/inspect
+Команды: docker network create/ls/inspect -->
 3. Docker Compose
 Управление многоконтейнерными приложениями:
 docker-compose.yml структура
