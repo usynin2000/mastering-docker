@@ -45,11 +45,11 @@ EXPOSE, USER, HEALTHCHECK -->
 Как контейнеры общаются между собой
 DNS внутри Docker
 Команды: docker network create/ls/inspect -->
-3. Docker Compose
+<!-- 3. Docker Compose
 Управление многоконтейнерными приложениями:
 docker-compose.yml структура
 Связывание сервисов
-Переменные окружения из .env
+Переменные окружения из .env -->
 4. Жизненный цикл контейнера
 Состояния: created → running → paused → stopped → deleted
 Команды: start, stop, pause, unpause, restart, kill
