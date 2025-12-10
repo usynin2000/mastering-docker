@@ -50,13 +50,13 @@ DNS внутри Docker
 docker-compose.yml структура
 Связывание сервисов
 Переменные окружения из .env -->
-4. Жизненный цикл контейнера
+<!-- 4. Жизненный цикл контейнера
 Состояния: created → running → paused → stopped → deleted
 Команды: start, stop, pause, unpause, restart, kill
-Restart policies: no, on-failure, always, unless-stopped
-5. Ограничения ресурсов (Resource limits)
+Restart policies: no, on-failure, always, unless-stopped -->
+<!-- 5. Ограничения ресурсов (Resource limits)
 --memory, --cpus, --memory-swap
-cgroups в действии
+cgroups в действии -->
 6. Оптимизация образов
 .dockerignore - что исключать из build context
 Порядок команд в Dockerfile (для кеширования)
