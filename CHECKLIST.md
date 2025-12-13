@@ -61,11 +61,10 @@ cgroups в действии -->
 .dockerignore - что исключать из build context
 Порядок команд в Dockerfile (для кеширования)
 Multi-stage builds для уменьшения размера -->
-<!-- 7. Логирование ✅
+<!-- 7. Логирование
 docker logs
 Драйверы логов: json-file, syslog, journald
-Ротация логов
-Разобрано в: LOGGING.md -->
+Ротация логов -->
 8. Переменные окружения и конфигурация
 -e, --env-file
 Передача секретов (Docker secrets)
